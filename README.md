@@ -1,2 +1,2 @@
-# BSc_project
+# Bachelor_project
 Bachelor's project, real analysis.
