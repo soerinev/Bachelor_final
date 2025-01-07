@@ -1,0 +1,53 @@
+---
+title: "AllSides prep"
+author: "Laura Sørine Voldgaard"
+date: "2024-11-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+# libraries
+pacman::p_load(tidyverse, extrafont, cowplot, stringr)
+```
+
+
+```{r}
+# load data
+allsides <- read.csv("AllSides_Media_Bias_Ratings_111224.csv")
+```
+
+
+```{r}
+# search for left-leaning articles
+allsides_left <- allsides %>%
+  filter(allsides_media_bias_ratings.publication.media_bias_rating == "Left" & allsides_media_bias_ratings.publication.source_type == "News Media")
+
+```
+
+
+```{r}
+# search for left-leaning articles
+allsides_right <- allsides %>%
+  filter(allsides_media_bias_ratings.publication.media_bias_rating == "Right" & allsides_media_bias_ratings.publication.source_type == "News Media")
+
+```
+
+```{r}
+# save csv
+write.csv(allsides_left, "allsides_left.csv", row.names = FALSE)
+write.csv(allsides_right, "allsides_right.csv", row.names = FALSE)
+
+```
+
+
+
+
+
+
+
+
