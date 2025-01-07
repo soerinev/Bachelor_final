@@ -1,0 +1,902 @@
+---
+title: "semantic_polarity"
+author: "Laura Sørine Voldgaard"
+date: "2024-11-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+```{r}
+# libraries
+pacman::p_load(tidyverse, extrafont, cowplot)
+
+theme_set(theme_bw())
+
+getwd()
+
+```
+
+```{r}
+# load data
+abortion <- read.csv("sp_abortion_months_df.csv") # 🤠
+fetus <- read.csv("sp_fetus_df.csv") # 🤠
+pregnancy <- read.csv("sp_pregnancy_df.csv") # 🤠
+roe <- read.csv("sp_roe_df.csv") # 🤠
+activists <- read.csv("activists.csv") # 🤠
+rights <- read.csv("rights.csv")
+
+
+#abortion_ban <- read.csv("sp_abortionban_df.csv")
+#dobbs_v_jackson <- read.csv("sp_dobbsvjackson_df.csv")
+#planned_parenthood <- read.csv("sp_plannedparenthood_df.csv")
+#pro_choice <- read.csv("sp_prochoice_df.csv")
+#pro_life <- read.csv("sp_prolife_df.csv")
+#reproductive_health <- read.csv("sp_reproductivehealth_df.csv")
+#roe_v_wade <- read.csv("sp_roevwade.csv")
+protesters <- read.csv("protesters.csv")
+
+```
+
+
+```{r}
+# yearly files
+abortion_year <- read.csv("ik_brug/sp_abortion_df.csv") # 🤠
+
+```
+
+
+
+
+
+*ABORTION*
+
+
+```{r}
+# Convert the 'months' column in the 'abortion' dataframe to Date format
+abortion$month <- as.Date(paste0(abortion$month, "-01"), format="%Y-%m-%d")
+
+# Replace 0 values in 'semantic_polarity' with NA to break the line
+abortion$semantic_polarity <- ifelse(abortion$semantic_polarity == 0, NA, abortion$semantic_polarity)
+
+# Plot semantic polarity over time with every 6 months on the x-axis
+abortion_plot <- ggplot(abortion, aes(x=month, y=semantic_polarity)) +
+  geom_line(color="darkolivegreen", size=1, na.rm = TRUE) +
+  geom_point(color="darkolivegreen4", size=2, na.rm = TRUE) +
+  labs(
+    title = "Abortion",
+    x = "Month",
+    y = "SP score"
+  ) +
+  scale_x_date(
+    date_breaks = "6 months", 
+    date_labels = "%b %Y"  # Format as abbreviated month and full year
+  ) +
+  theme_minimal() +
+  theme(text = element_text(family = "Helvetica"))
+
+abortion_plot
+
+```
+
+```{r}
+# save plot
+ggsave("fr/abortion.png", plot = abortion_plot, width = 8, height = 6, dpi = 300)  # Save as PNG
+```
+
+```{r}
+# Abortion
+library(dplyr)
+
+# Convert 'month' to a numeric representation (e.g., days since the start of the dataset)
+abortion <- abortion %>% mutate(month_numeric = as.numeric(month))
+
+# Perform correlation test (excluding NA values)
+correlation_test <- cor.test(abortion$month_numeric, abortion$semantic_polarity, use = "complete.obs")
+
+# Print the test results
+print(correlation_test)
+```
+
+```{r}
+summary(abortion)  # View summary of the dataset
+sum(is.na(abortion$month_numeric))  # Count NA values in 'month_numeric'
+sum(is.na(abortion$semantic_polarity))  # Count NA values in 'semantic_polarity'
+sum(!is.finite(abortion$semantic_polarity))  # Check for infinite values
+
+```
+
+
+
+
+
+Trying to add stippled average line
+
+
+
+```{r}
+# this one gives the same as yearly results
+
+library(dplyr)
+library(ggplot2)
+
+# Convert the 'months' column in the 'abortion' dataframe to Date format
+abortion$month <- as.Date(paste0(abortion$month, "-01"), format="%Y-%m-%d")
+
+# Replace 0 values in 'semantic_polarity' with NA to break the line
+abortion$semantic_polarity <- ifelse(abortion$semantic_polarity == 0, NA, abortion$semantic_polarity)
+
+# Extract year and calculate yearly averages, including incomplete years
+abortion$year <- format(abortion$month, "%Y")
+yearly_avg <- abortion %>%
+  group_by(year) %>%
+  summarise(yearly_avg_sp = mean(semantic_polarity, na.rm = TRUE)) %>%
+  mutate(year = as.Date(paste0(year, "-01-01")))  # Convert year back to Date format
+
+# Exclude 2020 explicitly for averages
+yearly_avg <- yearly_avg %>%
+  filter(!(year == as.Date("2020-01-01")))
+
+# Plot semantic polarity over time with yearly averages
+abortion_plot <- ggplot() +
+  geom_line(data = abortion, aes(x = month, y = semantic_polarity), color = "darkolivegreen", size = 1, na.rm = TRUE) +
+  geom_point(data = abortion, aes(x = month, y = semantic_polarity), color = "darkolivegreen4", size = 2, na.rm = TRUE) +
+  geom_line(data = yearly_avg, aes(x = year, y = yearly_avg_sp), linetype = "dashed", color = "orange", size = 1) +  # Add yearly average line
+  labs(
+    title = "Abortion",
+    x = "Month",
+    y = "SP score"
+  ) +
+  scale_x_date(
+    date_breaks = "6 months", 
+    date_labels = "%b %Y"  # Format as abbreviated month and full year
+  ) +
+  theme_minimal() +
+  theme(text = element_text(family = "Helvetica"))
+
+# Print the plot
+abortion_plot
+
+```
+
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(zoo)
+
+# Convert the 'months' column in the 'abortion' dataframe to Date format
+abortion$month <- as.Date(paste0(abortion$month, "-01"), format="%Y-%m-%d")
+
+# Replace 0 values in 'semantic_polarity' with NA to break the line
+abortion$semantic_polarity <- ifelse(abortion$semantic_polarity == 0, NA, abortion$semantic_polarity)
+
+# Calculate a 6-month rolling average
+abortion <- abortion %>%
+  arrange(month) %>%
+  mutate(rolling_avg_sp = zoo::rollmean(semantic_polarity, k = 8, fill = NA, align = "right"))  # Right-aligned 6-month average
+
+# Plot semantic polarity over time with 6-month rolling average
+abortion_plot <- ggplot() +
+  geom_line(data = abortion, aes(x = month, y = semantic_polarity), color = "darkolivegreen", size = 1, na.rm = TRUE) +
+  geom_point(data = abortion, aes(x = month, y = semantic_polarity), color = "darkolivegreen4", size = 2, na.rm = TRUE) +
+  geom_line(data = abortion, aes(x = month, y = rolling_avg_sp), linetype = "dashed", color = "darkorange", size = 1) +  # Add rolling average line
+  labs(
+    title = "Abortion",
+    x = "Month",
+    y = "SP score"
+  ) +
+  scale_x_date(
+    date_breaks = "6 months", 
+    date_labels = "%b %Y"  # Format as abbreviated month and full year
+  ) +
+  theme_minimal() +
+  theme(text = element_text(family = "Helvetica"),
+        plot.title = element_text(face = "bold")  # Make the title bold
+        )
+
+# Print the plot
+abortion_plot
+
+```
+
+
+
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Convert the 'months' column in the 'abortion' dataframe to Date format
+abortion$month <- as.Date(paste0(abortion$month, "-01"), format="%Y-%m-%d")
+
+# Replace 0 values in 'semantic_polarity' with NA to break the line
+abortion$semantic_polarity <- ifelse(abortion$semantic_polarity == 0, NA, abortion$semantic_polarity)
+
+# Create the abortion_year dataframe (example structure for clarity)
+ abortion_year <- data.frame(year = as.Date(c("2021-01-01", "2022-01-01", "2023-01-01", "2024-01-01")),
+                             yearly_avg_sp = c(0.1646874, 0.1673974, 0.1644966, 0.1706463))
+
+# Plot semantic polarity over time
+abortion_plot <- ggplot(abortion, aes(x = month, y = semantic_polarity)) +
+  geom_line(color = "darkolivegreen", size = 1, na.rm = TRUE) +
+  geom_point(color = "darkolivegreen4", size = 2, na.rm = TRUE) +
+  geom_line(data = abortion_year, aes(x = year, y = yearly_avg_sp), color = "blue", size = 1, linetype = "dotted") +  # Add yearly averages
+  geom_point(data = abortion_year, aes(x = year, y = yearly_avg_sp), color = "blue", size = 3) +  # Add points for yearly averages
+  labs(
+    title = "Abortion - Monthly and Yearly SP Scores",
+    x = "Month",
+    y = "SP score"
+  ) +
+  scale_x_date(
+    date_breaks = "6 months",
+    date_labels = "%b %Y"  # Format as abbreviated month and full year
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "Helvetica"),
+    plot.title = element_text(face = "bold")  # Make the title bold
+  )
+
+# Print the plot
+abortion_plot
+
+```
+
+
+```{r}
+# Assuming abortion_year is already loaded and has columns "year" and "semantic_polarity"
+# Ensure the "year" column is in Date format
+abortion_year$year <- as.Date(abortion_year$year)
+
+# Convert the 'months' column in the 'abortion' dataframe to Date format
+abortion$month <- as.Date(paste0(abortion$month, "-01"), format="%Y-%m-%d")
+
+# Replace 0 values in 'semantic_polarity' with NA to break the line
+abortion$semantic_polarity <- ifelse(abortion$semantic_polarity == 0, NA, abortion$semantic_polarity)
+
+# Plot semantic polarity over time with yearly averages from the real dataframe
+abortion_plot <- ggplot(abortion, aes(x = month, y = semantic_polarity)) +
+  geom_line(color = "darkolivegreen", size = 1, na.rm = TRUE) +
+  geom_point(color = "darkolivegreen4", size = 2, na.rm = TRUE) +
+  geom_line(data = abortion_year, aes(x = year, y = semantic_polarity), color = "blue", size = 1, linetype = "dotted") +  # Add yearly averages
+  geom_point(data = abortion_year, aes(x = year, y = semantic_polarity), color = "blue", size = 3) +  # Add points for yearly averages
+  labs(
+    title = "Abortion - Monthly and Yearly SP Scores",
+    x = "Month",
+    y = "SP score"
+  ) +
+  scale_x_date(
+    date_breaks = "6 months",
+    date_labels = "%b %Y"  # Format as abbreviated month and full year
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "Helvetica"),
+    plot.title = element_text(face = "bold")  # Make the title bold
+  )
+
+# Print the plot
+abortion_plot
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+*ROE*
+
+```{r}
+# Convert the 'month' column to Date format
+roe$month <- as.Date(paste0(roe$month, "-01"), format="%Y-%m-%d")
+
+# Replace 0 values with NA to break the line
+roe$semantic_polarity <- ifelse(roe$semantic_polarity == 0, NA, roe$semantic_polarity)
+
+# Plot semantic polarity over time with every 6 months on the x-axis
+roe_plot <- ggplot(roe, aes(x=month, y=semantic_polarity)) +
+  geom_line(color="darkolivegreen", size=1, na.rm = TRUE) +
+  geom_point(color="darkolivegreen4", size=2, na.rm = TRUE) +
+  labs(
+    title = "Roe",
+    x = "Month",
+    y = "SP score"
+  ) +
+  scale_x_date(
+    date_breaks = "6 months", 
+    date_labels = "%b %Y"  # Format as abbreviated month and full year
+  ) +
+  theme_minimal() +
+  theme(text = element_text(family = "Helvetica"))
+
+roe_plot
+
+```
+
+```{r}
+# save plot
+ggsave("fr/roe.png", plot = roe_plot, width = 8, height = 6, dpi = 300)  # Save as PNG
+```
+
+
+
+
+
+```{r}
+library(ggplot2)
+library(zoo)
+
+# Convert the 'month' column to Date format
+roe$month <- as.Date(paste0(roe$month, "-01"), format = "%Y-%m-%d")
+
+# Replace 0 values with NA to break the line
+roe$semantic_polarity <- ifelse(roe$semantic_polarity == 0, NA, roe$semantic_polarity)
+
+# Calculate a 6-month rolling average
+roe <- roe %>%
+  arrange(month) %>%
+  mutate(rolling_avg_sp = zoo::rollmean(semantic_polarity, k = 6, fill = NA, align = "right"))  # Right-aligned 6-month rolling average
+
+# Plot semantic polarity over time with 6-month rolling average
+roe_plot <- ggplot() +
+  geom_line(data = roe, aes(x = month, y = semantic_polarity), color = "darkolivegreen", size = 1, na.rm = TRUE) +
+  geom_point(data = roe, aes(x = month, y = semantic_polarity), color = "darkolivegreen4", size = 2, na.rm = TRUE) +
+  geom_line(data = roe, aes(x = month, y = rolling_avg_sp), color = "darkorange", linetype = "dashed", size = 1) +  # Add 6-month rolling average
+  labs(
+    title = "Roe - SP Scores with 6-Month Rolling Average",
+    x = "Month",
+    y = "SP score"
+  ) +
+  scale_x_date(
+    date_breaks = "6 months",
+    date_labels = "%b %Y"  # Format as abbreviated month and full year
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "Helvetica"),
+    plot.title = element_text(face = "bold")  # Make the title bold
+  )
+
+# Print the plot
+roe_plot
+
+```
+
+
+
+
+
+
+
+
+
+
+*FETUS*
+
+```{r}
+# Convert the 'month' column to Date format
+fetus$month <- as.Date(paste0(fetus$month, "-01"), format="%Y-%m-%d")
+
+# Replace 0 values with NA to break the line
+fetus$semantic_polarity <- ifelse(fetus$semantic_polarity == 0, NA, fetus$semantic_polarity)
+
+# Plot semantic polarity over time with every 6 months on the x-axis
+fetus_plot <- ggplot(fetus, aes(x=month, y=semantic_polarity)) +
+  geom_line(color="darkolivegreen", size=1, na.rm = TRUE) +
+  geom_point(color="darkolivegreen4", size=2, na.rm = TRUE) +
+  labs(
+    title = "Fetus",
+    x = "Month",
+    y = "SP score"
+  ) +
+  scale_x_date(
+    date_breaks = "6 months", 
+    date_labels = "%b %Y"  # Format as abbreviated month and full year
+  ) +
+  theme_minimal() +
+  theme(text = element_text(family = "Helvetica"))
+
+fetus_plot
+
+```
+
+```{r}
+# save plot
+ggsave("fr/fetus.png", plot = fetus_plot, width = 8, height = 6, dpi = 300)  # Save as PNG
+```
+
+
+
+*PREGNANCY*
+
+```{r}
+# Convert the 'month' column to Date format
+pregnancy$month <- as.Date(paste0(pregnancy$month, "-01"), format="%Y-%m-%d")
+
+# Replace 0 values with NA to break the line
+pregnancy$semantic_polarity <- ifelse(pregnancy$semantic_polarity == 0, NA, pregnancy$semantic_polarity)
+
+# Plot semantic polarity over time with every 6 months on the x-axis
+pregnancy_plot <- ggplot(pregnancy, aes(x=month, y=semantic_polarity)) +
+  geom_line(color="darkolivegreen", size=1, na.rm = TRUE) +
+  geom_point(color="darkolivegreen4", size=2, na.rm = TRUE) +
+  labs(
+    title = "Pregnancy",
+    x = "Month",
+    y = "SP score"
+  ) +
+  scale_x_date(
+    date_breaks = "6 months", 
+    date_labels = "%b %Y"  # Format as abbreviated month and full year
+  ) +
+  theme_minimal() +
+  theme(text = element_text(family = "Helvetica"))
+
+pregnancy_plot
+
+```
+
+```{r}
+# save plot
+ggsave("fr/pregnancy.png", plot = pregnancy_plot, width = 8, height = 6, dpi = 300)  # Save as PNG
+```
+
+
+*RIGHTS*
+
+```{r}
+# Convert the 'month' column to Date format
+rights$month <- as.Date(paste0(rights$month, "-01"), format="%Y-%m-%d")
+
+# Replace 0 values with NA to break the line
+rights$semantic_polarity <- ifelse(rights$semantic_polarity == 0, NA, rights$semantic_polarity)
+
+# Plot semantic polarity over time with every 6 months on the x-axis
+rights_plot <- ggplot(rights, aes(x=month, y=semantic_polarity)) +
+  geom_line(color="darkolivegreen", size=1, na.rm = TRUE) +
+  geom_point(color="darkolivegreen4", size=2, na.rm = TRUE) +
+  labs(
+    title = "Rights",
+    x = "Month",
+    y = "SP score"
+  ) +
+  scale_x_date(
+    date_breaks = "6 months", 
+    date_labels = "%b %Y"  # Format as abbreviated month and full year
+  ) +
+  theme_minimal() +
+  theme(text = element_text(family = "Helvetica"))
+
+rights_plot
+
+```
+
+```{r}
+# save plot
+ggsave("fr/rights.png", plot = rights_plot, width = 8, height = 6, dpi = 300)  # Save as PNG
+```
+
+
+
+*ACTIVISTS*
+
+```{r}
+# Convert the 'month' column to Date format
+activists$month <- as.Date(paste0(activists$month, "-01"), format="%Y-%m-%d")
+
+# Replace 0 values with NA to break the line
+activists$semantic_polarity <- ifelse(activists$semantic_polarity == 0, NA, activists$semantic_polarity)
+
+# Plot semantic polarity over time with every 6 months on the x-axis
+activists_plot <- ggplot(activists, aes(x=month, y=semantic_polarity)) +
+  geom_line(color="darkolivegreen", size=1, na.rm = TRUE) +
+  geom_point(color="darkolivegreen4", size=2, na.rm = TRUE) +
+  labs(
+    title = "Activists",
+    x = "Month",
+    y = "SP score"
+  ) +
+  scale_x_date(
+    date_breaks = "6 months", 
+    date_labels = "%b %Y"  # Format as abbreviated month and full year
+  ) +
+  theme_minimal() +
+  theme(text = element_text(family = "Helvetica"))
+
+activists_plot
+
+```
+
+```{r}
+# save plot
+ggsave("fr/activists.png", plot = activists_plot, width = 8, height = 6, dpi = 300)  # Save as PNG
+```
+
+
+
+
+
+
+
+
+***GRIDDDD***
+```{r}
+# Load the required package
+library(gridExtra)
+
+# Arrange the plots in a 2x3 grid
+grid_plot <- grid.arrange(
+  abortion_plot, roe_plot, fetus_plot, 
+  pregnancy_plot, rights_plot, activists_plot,
+  ncol = 2  # Number of columns
+)
+grid_plot
+
+# Save the combined plot as an image
+ggsave("fr/all_plots_grid.png", plot = grid_plot, width = 16, height = 18, dpi = 300)
+
+```
+
+YAY!!
+
+
+--------------------------------
+
+**Correlation tests**
+
+
+```{r}
+# All - run all plots first
+
+# 1) Combine multiple datasets into a single list
+datasets <- list(
+  dataset1 = abortion,
+  dataset2 = roe,
+  dataset3 = fetus,
+  dataset4 = pregnancy,
+  dataset5 = rights,
+  dataset6 = activists
+)
+
+```
+
+
+
+```{r}
+# Prepare a function to calculate correlations for each dataset
+run_correlation_test <- function(data, name) {
+  # Convert 'month' to numeric
+  data <- data %>% mutate(month_numeric = as.numeric(month))
+  
+  # Run correlation test
+  test_result <- cor.test(data$month_numeric, data$semantic_polarity, use = "complete.obs")
+  
+  # Store the results in a data frame
+  data.frame(
+    Dataset = name,
+    Correlation_Coefficient = test_result$estimate,
+    t_Statistic = test_result$statistic,
+    Degrees_of_Freedom = test_result$parameter,
+    P_Value = test_result$p.value,
+    CI_Lower = test_result$conf.int[1],
+    CI_Upper = test_result$conf.int[2]
+  )
+}
+
+# Loop through the datasets and gather results
+results <- lapply(names(datasets), function(name) {
+  run_correlation_test(datasets[[name]], name)
+})
+
+# Combine results into a single data frame
+results_table <- do.call(rbind, results)
+
+# Print the results
+print(results_table)
+
+```
+
+
+
+
+
+
+```{r}
+install.packages("flextable")
+install.packages("officer")
+```
+
+```{r}
+# Load necessary libraries
+library(flextable)
+
+# Create the data frame
+table_data <- data.frame(
+  Keyword = c("Abortion", "Roe", "Fetus", "Pregnancy", "Rights", "Activists"),
+  Correlation_Coefficient = round(c(0.036, -0.598, 0.048, -0.043, -0.408, -0.012), 3),
+  t_Statistic = round(c(0.2446, -4.9535, 0.2673, -0.2836, -3.0341, -0.0790), 3),
+  Degrees_of_Freedom = c(46, 44, 31, 44, 46, 40),
+  P_Value = c(0.808, 1.124e-05, 0.791, 0.778, 0.00396, 0.937),
+  CI = c(
+    "[-0.251, 0.317]",
+    "[-0.757, -0.373]",
+    "[-0.300, 0.385]",
+    "[-0.329, 0.251]",
+    "[-0.620, -0.141]",
+    "[-0.315, 0.293]"
+  )
+)
+
+# Add significance stars
+table_data$Significance <- sapply(table_data$P_Value, function(p) {
+  if (p < 0.001) {
+    return("***")
+  } else if (p < 0.01) {
+    return("**")
+  } else if (p < 0.05) {
+    return("*")
+  } else {
+    return("ns")
+  }
+})
+
+# Create the flextable
+pretty_table <- flextable(table_data) %>%
+  set_header_labels(
+    Correlation_Coefficient = "Correlation Coefficient",
+    t_Statistic = "t-Statistic",
+    Degrees_of_Freedom = "Degrees of Freedom",
+    P_Value = "P-Value",
+    CI = "95% Confidence Interval",
+    Significance = "Significance Level"
+  ) %>%
+  autofit() %>%  # Automatically adjust column widths
+  theme_vanilla()  # Apply a clean, professional theme
+
+
+```
+```{r}
+pretty_table
+```
+
+
+```{r}
+# Save the table as an image
+save_as_image(pretty_table, "pretty_table_flextable.png")
+```
+
+
+
+
+
+---------------------------------
+
+## Kladder
+
+*PROTESTERS*
+```{r}
+# Convert the 'month' column to Date format
+protesters$month <- as.Date(paste0(protesters$month, "-01"), format="%Y-%m-%d")
+
+# Replace 0 values with NA to break the line
+protesters$semantic_polarity <- ifelse(protesters$semantic_polarity == 0, NA, protesters$semantic_polarity)
+
+# Plot semantic polarity over time with every 6 months on the x-axis
+protesters_plot <- ggplot(protesters, aes(x=month, y=semantic_polarity)) +
+  geom_line(color="darkolivegreen", size=1, na.rm = TRUE) +
+  geom_point(color="darkolivegreen4", size=2, na.rm = TRUE) +
+  labs(
+    title = "Protesters",
+    x = "Month",
+    y = "SP score"
+  ) +
+  scale_x_date(
+    date_breaks = "6 months", 
+    date_labels = "%b %Y"  # Format as abbreviated month and full year
+  ) +
+  theme_minimal() +
+  theme(text = element_text(family = "Helvetica"))
+
+protesters_plot
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+Result year - 'abortion'
+```{r}
+# Create the plot
+ggplot(sp_df, aes(x=year, y=semantic_polarity)) +
+  geom_line(color="darkcyan", size=1) +
+annotate(
+    "text", 
+    x = 2022.3,  # Adjust x position as needed
+    y = 0.29,  # Adjust y position as needed
+    label = "Abortion", 
+    color = "darkcyan", 
+    family = "Times New Roman", 
+    size = 5,
+    face = "bold") +
+  labs(
+    title="Evolution of semantic polarization",
+    x="Year",
+    y="Semantic Polarization"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "Times New Roman"),
+    plot.title = element_text(hjust = 0.5, size=18),
+    axis.title = element_text(size=12),
+    axis.text = element_text(size=12)
+  )
+```
+
+
+
+```{r}
+# Convert the 'month' column to Date format
+abortion$month <- as.Date(paste0(abortion$month, "-01"), format="%Y-%m-%d")
+
+# Plot semantic polarity over time
+abortion_plot <- ggplot(abortion, aes(x=month, y=semantic_polarity)) +
+  geom_line(color="darkolivegreen", size=1) +
+  geom_point(color="darkolivegreen4", size=2) +
+  labs(
+    title = "Semantic Polarity Over Time",
+    x = "Month",
+    y = "Semantic Polarity"
+  ) +
+  theme_minimal()
+
+abortion_plot
+```
+
+
+
+
+
+*ABORTION BAN*
+
+```{r}
+# Convert the 'month' column to Date format
+abortion_ban$month <- as.Date(paste0(abortion_ban$month), format="%Y-%m")
+
+# Replace 0 values with NA to break the line
+abortion_ban$semantic_polarity <- ifelse(abortion_ban$semantic_polarity == 0, NA, abortion_ban$semantic_polarity)
+
+# Plot semantic polarity over time
+abortion_ban_plot <- ggplot(abortion_ban, aes(x=month, y=semantic_polarity)) +
+  geom_line(color="darkolivegreen", size=1, na.rm = TRUE) +
+  geom_point(color="darkolivegreen4", size=2, na.rm = TRUE) +
+  labs(
+    title = "Abortion",
+    x = "Month",
+    y = "Semantic Polarity"
+  ) +
+  theme_minimal()
+
+abortion_ban_plot
+
+```
+
+Result month - 'prolife'
+
+```{r}
+# Convert the 'month' column to Date format
+pro_life$month <- as.Date(paste0(pro_life$month, "-01"), format="%Y-%m-%d")
+
+# Plot semantic polarity over time
+ggplot(pro_life, aes(x=month, y=semantic_polarity)) +
+  geom_line(color="darkolivegreen", size=1) +
+  geom_point(color="darkolivegreen4", size=2) +
+  labs(
+    title = "Semantic Polarity Over Time",
+    x = "Month",
+    y = "Semantic Polarity"
+  ) +
+  theme_minimal()
+```
+
+
+
+
+Result month - 'prochoice'
+```{r}
+# Convert the 'month' column to Date format
+pro_choice$month <- as.Date(paste0(pro_choice$month, "-01"), format="%Y-%m-%d")
+
+# Plot semantic polarity over time
+ggplot(pro_choice, aes(x=month, y=semantic_polarity)) +
+  geom_line(color="darkolivegreen", size=1) +
+  geom_point(color="darkolivegreen4", size=2) +
+  labs(
+    title = "Semantic Polarity Over Time",
+    x = "Month",
+    y = "Semantic Polarity"
+  ) +
+  theme_minimal()
+```
+
+
+
+
+
+
+Result month - 'prolife'
+```{r}
+# Convert the 'month' column to Date format
+sp_prolife_df$month <- as.Date(paste0(sp_prolife_df$month, "-01"), format="%Y-%m-%d")
+
+# Plot semantic polarity over time
+ggplot(sp_prolife_df, aes(x=month, y=semantic_polarity)) +
+  geom_line(color="darkolivegreen", size=1) +
+  geom_point(color="darkolivegreen4", size=2) +
+  labs(
+    title = "Semantic Polarity Over Time",
+    x = "Month",
+    y = "Semantic Polarity"
+  ) +
+  theme_minimal()
+```
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

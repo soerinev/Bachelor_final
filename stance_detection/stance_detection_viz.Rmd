@@ -1,0 +1,1951 @@
+---
+title: "stance_detection_viz"
+author: "Laura Sørine Voldgaard"
+date: "2024-11-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# libraries
+pacman::p_load(tidyverse, extrafont, cowplot, stringr)
+
+getwd()
+```
+
+```{r}
+# load data
+sd <- read.csv("stance_detection_result.csv")
+```
+
+```{r}
+# cleaning
+sd <- sd %>% 
+  rename('for' = 'for.') # removing the dot in for.
+```
+
+
+*Plots*
+
+Number of articles per stance
+```{r}
+# bar plot to count articles for each stance
+stance_total <- ggplot(sd, aes(x = stance, fill = stance)) +
+  geom_bar() +
+  labs(title = "Number of Articles by Stance", x = "Stance", y = "Number of Articles") +
+  theme_minimal()
+stance_total
+
+```
+
+```{r}
+# save plot
+ggsave("stance_total.png", plot = stance_total, width = 8, height = 6, dpi = 300)  # Save as PNG
+```
+
+
+
+
+
+Number of articles per stance over time
+```{r}
+# Convert `date` to Date format and extract the year
+sd <- sd %>%
+  mutate(year = as.numeric(format(as.Date(date), "%Y")))
+
+# Group by year and stance, then count the number of articles
+sd_grouped <- sd %>%
+  group_by(year, stance) %>%
+  summarise(article_count = n(), .groups = "drop")
+
+# Plot the development over years
+ggplot(sd_grouped, aes(x = year, y = article_count, color = stance, group = stance)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  labs(title = "Development of Articles by Stance Over Time",
+       x = "Year",
+       y = "Number of Articles",
+       color = "Stance") +
+  theme_cowplot()
+
+```
+
+Number of articles per stance over time - proportional normalization
+```{r}
+# Convert `date` to Date format and extract the year
+sd <- sd %>%
+  mutate(year = as.numeric(format(as.Date(date), "%Y")))
+
+# Group by year and stance, then count the number of articles
+sd_grouped <- sd %>%
+  group_by(year, stance) %>%
+  summarise(article_count = n(), .groups = "drop")
+
+# Compute the total number of articles per year
+year_totals <- sd_grouped %>%
+  group_by(year) %>%
+  summarise(total_articles = sum(article_count))
+
+# Merge the totals back into the grouped data
+sd_normalized <- sd_grouped %>%
+  left_join(year_totals, by = "year") %>%
+  mutate(proportion = article_count / total_articles)
+
+# Plot the proportion of stances over time
+ggplot(sd_normalized, aes(x = year, y = proportion, color = stance, group = stance)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  labs(title = "Development of Stances Over Time (Normalized)",
+       x = "Year",
+       y = "Proportion of Articles",
+       color = "Stance") +
+  theme_cowplot()
+
+```
+
+
+
+
+
+
+
+
+
+Number of articles per stance, CNN and Fox News
+```{r}
+# Group by source and stance, then count the number of articles
+sd_static <- sd %>%
+  group_by(leaning, stance) %>%
+  summarise(article_count = n(), .groups = "drop")
+
+# Create a custom color palette
+custom_colors <- c("Left" = "blue", "Right" = "red")
+
+
+# Create a grouped bar plot
+ggplot(sd_static, aes(x = stance, y = article_count, fill = leaning)) +
+  geom_bar(stat = "identity", position = "dodge") +
+    scale_fill_manual(values = custom_colors) +  # Apply custom colors
+  labs(title = "Number of Articles by Stance and Leaning",
+       x = "Stance",
+       y = "Number of Articles",
+       fill = "Leaning") +
+  theme_minimal()
+
+```
+
+
+Number of articles per stance, CNN and Fox News - proportional normalization
+```{r}
+# Group by source and stance, then count the number of articles
+sd_static <- sd %>%
+  group_by(leaning, stance) %>%
+  summarise(article_count = n(), .groups = "drop")
+
+# Compute the total number of articles per source
+leaning_totals <- sd_static %>%
+  group_by(leaning) %>%
+  summarise(total_articles = sum(article_count))
+
+# Merge the totals back into the grouped data
+sd_normalized <- sd_static %>%
+  left_join(leaning_totals, by = "leaning") %>%
+  mutate(proportion = article_count / total_articles)
+
+# Create a custom color palette
+custom_colors <- c("Left" = "blue", "Right" = "red")
+
+
+# Create a grouped bar plot with custom colors
+stance_static_leaning <- ggplot(sd_normalized, aes(x = stance, y = proportion, fill = leaning)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = custom_colors) +  # Apply custom colors
+  labs(title = "Proportion of Articles by Stance and Source (normalized)",
+       x = "Stance",
+       y = "Proportion of Articles",
+       fill = "Leaning") +
+  theme_minimal()
+
+stance_static_leaning
+
+```
+
+```{r}
+# save plot
+ggsave("stance_static_leaning.png", plot = stance_static_leaning, width = 8, height = 6, dpi = 300)  # Save as PNG
+```
+
+
+
+Number of articles per stance over time (year) CNN and Fox News (proportional normalization)
+```{r}
+# Convert `date` to Date format and extract the year
+sd <- sd %>%
+  mutate(year = as.numeric(format(as.Date(date), "%Y")))
+
+# Group by year, leaning, and stance, then count the number of articles
+sd_grouped <- sd %>%
+  group_by(year, leaning, stance) %>%
+  summarise(article_count = n(), .groups = "drop")
+
+# Compute the total number of articles per source and year
+leaning_year_totals <- sd_grouped %>%
+  group_by(year, leaning) %>%
+  summarise(total_articles = sum(article_count), .groups = "drop")
+
+# Merge the totals back into the grouped data
+sd_normalized <- sd_grouped %>%
+  left_join(leaning_year_totals, by = c("year", "leaning")) %>%
+  mutate(proportion = article_count / total_articles)
+
+# Filter for CNN and Fox News only
+sd_filtered <- sd_normalized %>%
+  filter(leaning %in% c("Left", "Right"))
+
+# Create a line plot showing proportions over time
+ggplot(sd_filtered, aes(x = year, y = proportion, color = stance, group = stance)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  facet_wrap(~leaning, ncol = 1) +  # Separate plots for CNN and Fox News
+  scale_color_manual(values = c("green", "orange", "darkcyan")) +  # Customize colors for stances
+  labs(title = "Proportion of Stances Over Time by Leaning",
+       x = "Year",
+       y = "Proportion of Articles",
+       color = "Leaning") +
+  theme_minimal()
+
+```
+
+
+
+Number of articles per stance over time (month) CNN and Fox News (proportional normalization)
+```{r}
+# Convert `date` to Date format and extract the month-year
+sd <- sd %>%
+  mutate(month_year = format(as.Date(date), "%Y-%m"))  # Extract month-year in "YYYY-MM" format
+
+# Group by month-year, source, and stance, then count the number of articles
+sd_grouped <- sd %>%
+  group_by(month_year, leaning, stance) %>%
+  summarise(article_count = n(), .groups = "drop")
+
+# Compute the total number of articles per source and month-year
+leaning_month_totals <- sd_grouped %>%
+  group_by(month_year, leaning) %>%
+  summarise(total_articles = sum(article_count), .groups = "drop")
+
+# Merge the totals back into the grouped data
+sd_normalized <- sd_grouped %>%
+  left_join(leaning_month_totals, by = c("month_year", "leaning")) %>%
+  mutate(proportion = article_count / total_articles)
+
+# Filter for CNN and Fox News only
+sd_filtered <- sd_normalized %>%
+  filter(leaning %in% c("Left", "Right"))
+
+# Convert month_year to a date format for proper x-axis ordering
+sd_filtered <- sd_filtered %>%
+  mutate(month_year = as.Date(paste0(month_year, "-01")))  # Convert to Date format
+
+# Create a line plot showing proportions over time (month-year granularity)
+ggplot(sd_filtered, aes(x = month_year, y = proportion, color = stance, group = stance)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  facet_wrap(~leaning, ncol = 1) +  # Separate plots for CNN and Fox News
+  scale_color_manual(values = c("green", "orange", "darkcyan")) +  # Customize colors for stances
+  labs(title = "Proportion of Stances Over Time by Leaning (normalized)",
+       x = "Month-Year",
+       y = "Proportion of Articles",
+       color = "Leaning") +
+  theme_minimal() +
+  scale_x_date(date_labels = "%b %y", date_breaks = "5 months")  # Format x-axis labels
+
+```
+
+
+73 day interval instead of each month
+```{r}
+# Convert `date` to Date format and compute 73-day intervals
+sd <- sd %>%
+  mutate(
+    date = as.Date(date),  # Ensure `date` is in Date format
+    interval_start = as.Date("1970-01-01") + ((as.numeric(date - as.Date("1970-01-01")) %/% 73) * 73)  # Compute interval start
+  )
+
+# Group by 73-day intervals, source, and stance, then count the number of articles
+sd_grouped <- sd %>%
+  group_by(interval_start, leaning, stance) %>%
+  summarise(article_count = n(), .groups = "drop")
+
+# Compute the total number of articles per source and interval
+leaning_interval_totals <- sd_grouped %>%
+  group_by(interval_start, leaning) %>%
+  summarise(total_articles = sum(article_count), .groups = "drop")
+
+# Merge the totals back into the grouped data
+sd_normalized <- sd_grouped %>%
+  left_join(leaning_interval_totals, by = c("interval_start", "leaning")) %>%
+  mutate(proportion = article_count / total_articles)
+
+# Filter for Left and Right only
+sd_filtered <- sd_normalized %>%
+  filter(leaning %in% c("Left", "Right"))
+
+# Create a line plot showing proportions over time (73-day intervals)
+stance_dynamic_leaning <- ggplot(sd_filtered, aes(x = interval_start, y = proportion, color = stance, group = stance)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  facet_wrap(~leaning, ncol = 1) +  # Separate plots for Left and Right
+  scale_color_manual(values = c("green", "orange", "darkcyan")) +  # Customize colors for stances
+  labs(
+    title = "Proportion of Stances Over Time by Leaning (normalized)",
+    x = "Time Interval (73 Days)",
+    y = "Proportion of Articles",
+    color = "Stance"
+  ) +
+  theme_minimal() +
+  scale_x_date(date_labels = "%b %y", date_breaks = "5 months")  # Format x-axis labels
+
+stance_dynamic_leaning
+```
+
+```{r}
+# save plot
+ggsave("stance_dynamic_leaning.png", plot = stance_dynamic_leaning, width = 8, height = 6, dpi = 300)  # Save as PNG
+```
+
+
+
+
+
+
+
+
+
+*Working with uncertainty*
+
+Ternary plot of article stance probabilities - together
+```{r}
+# Install the 'ggtern' package if not already installed
+install.packages("ggtern")
+
+library(ggtern)
+
+# Create a custom color palette
+custom_colors <- c("Left" = "blue", "Right" = "red")
+
+# Ternary plot
+ggtern(data = sd, aes(x = `for`, y = `neutral.toward`, z = against)) +
+  geom_point(aes(color = leaning), size = 2, alpha = 0.7) +
+  scale_color_manual(values = custom_colors) +  # Apply custom colors
+  labs(title = "Ternary Plot of Article Stance Probabilities",
+       x = "For",
+       y = "Neutral",
+       z = "Against") +
+  theme_minimal()
+
+```
+
+
+Ternary plot of article stance probabilities - for Left nad Right separately - no line
+```{r}
+# Install the 'ggtern' package if not already installed
+install.packages("ggtern")
+
+library(ggtern)
+library(dplyr)  # For data manipulation
+
+# Create a custom color palette
+custom_colors <- c("Left" = "blue", "Right" = "red")
+
+# Filter data for Left-leaning articles and plot
+left_plot <- ggtern(
+  data = filter(sd, leaning == "Left"),  # Filter for Left-leaning
+  aes(x = `for`, y = `neutral.toward`, z = against)
+) +
+  geom_point(color = custom_colors["Left"], size = 2, alpha = 0.7) +
+  labs(
+    title = "Ternary Plot of Article Stance Probabilities (Left-Leaning)",
+    x = "For",
+    y = "Neutral",
+    z = "Against"
+  ) +
+  theme_minimal()
+
+# Filter data for Right-leaning articles and plot
+right_plot <- ggtern(
+  data = filter(sd, leaning == "Right"),  # Filter for Right-leaning
+  aes(x = `for`, y = `neutral.toward`, z = against)
+) +
+  geom_point(color = custom_colors["Right"], size = 2, alpha = 0.7) +
+  labs(
+    title = "Ternary Plot of Article Stance Probabilities (Right-Leaning)",
+    x = "For",
+    y = "Neutral",
+    z = "Against"
+  ) +
+  theme_minimal()
+
+# Print the plots
+print(left_plot)
+print(right_plot)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Ternary Plot of Article Stance Probabilities - with line
+```{r}
+# Install and load the required ggtern package
+# install.packages("ggtern")
+#library(ggtern)
+#library(dplyr)
+
+# Create a custom color palette
+custom_colors <- c("Left" = "blue", "Right" = "red")
+
+# Define coordinates for the lines that split the triangle into 3 equal regions
+split_lines <- data.frame(
+  x_start = c(0.5, 0, 0.5),   # Midpoints of triangle edges
+  y_start = c(0, 0.5, 0.5),
+  z_start = c(0.5, 0.5, 0),
+  x_end = c(0.5, 0.5, 0.5),  # Center point
+  y_end = c(0.5, 0.5, 0.5),
+  z_end = c(0.5, 0.5, 0.5)
+)
+
+# Filter data for Left-leaning articles and create the plot
+left_plot <- ggtern(
+  data = filter(sd, leaning == "Left"),  # Filter for Left-leaning
+  aes(x = `for`, y = `neutral.toward`, z = against)
+) +
+  geom_point(color = custom_colors["Left"], size = 1.6, alpha = 0.7) +  # Points
+  geom_segment(data = split_lines, inherit.aes = FALSE,  # Add dividing lines
+               aes(x = x_start, y = y_start, z = z_start, 
+                   xend = x_end, yend = y_end, zend = z_end), 
+               color = "black", size = 0.7) +  # Thin lines
+  labs(
+    title = "Left-Leaning",
+    x = "For",
+    y = "Neutral",
+    z = "Against"
+  ) +
+  theme_minimal()
+
+# Filter data for Right-leaning articles and create the plot
+right_plot <- ggtern(
+  data = filter(sd, leaning == "Right"),  # Filter for Right-leaning
+  aes(x = `for`, y = `neutral.toward`, z = against)
+) +
+  geom_point(color = custom_colors["Right"], size = 1.6, alpha = 0.7) +  # Points
+  geom_segment(data = split_lines, inherit.aes = FALSE,  # Add dividing lines
+               aes(x = x_start, y = y_start, z = z_start, 
+                   xend = x_end, yend = y_end, zend = z_end), 
+               color = "black", size = 0.7) +  # Thin lines
+  labs(
+    title = "Right-Leaning",
+    x = "For",
+    y = "Neutral",
+    z = "Against"
+  ) +
+  theme_minimal()
+
+# Print the plots
+print(left_plot)
+print(right_plot)
+
+```
+
+```{r}
+# save plot
+ggsave("right_plot.png", plot = right_plot, width = 8, height = 6, dpi = 300)  # Save as PNG
+ggsave("left_plot.png", plot = left_plot, width = 8, height = 6, dpi = 300)  # Save as PNG
+
+```
+
+
+
+Ternary Plot of Article Stance Probabilities - Grid
+```{r}
+# Install and load required packages
+# install.packages("ggtern")
+# install.packages("gridExtra")
+library(ggtern)
+library(dplyr)
+library(gridExtra)
+
+# Create a custom color palette
+custom_colors <- c("Left" = "blue", "Right" = "red")
+
+# Define coordinates for the lines that split the triangle into 3 equal regions
+split_lines <- data.frame(
+  x_start = c(0.5, 0, 0.5),   # Midpoints of triangle edges
+  y_start = c(0, 0.5, 0.5),
+  z_start = c(0.5, 0.5, 0),
+  x_end = c(0.5, 0.5, 0.5),  # Center point
+  y_end = c(0.5, 0.5, 0.5),
+  z_end = c(0.5, 0.5, 0.5)
+)
+
+# Filter data for Left-leaning articles and create the plot
+left_plot <- ggtern(
+  data = filter(sd, leaning == "Left"),  # Filter for Left-leaning
+  aes(x = `for`, y = `neutral.toward`, z = against)
+) +
+  geom_point(color = custom_colors["Left"], size = 1.5, alpha = 0.7) +  # Points
+  geom_segment(data = split_lines, inherit.aes = FALSE,  # Add dividing lines
+               aes(x = x_start, y = y_start, z = z_start, 
+                   xend = x_end, yend = y_end, zend = z_end), 
+               color = "black", size = 0.7) +  # Thin lines
+  labs(
+    title = "Left-Leaning",
+    x = "For",
+    y = "Neutral",
+    z = "Against"
+  ) +
+  theme_minimal()
+
+# Filter data for Right-leaning articles and create the plot
+right_plot <- ggtern(
+  data = filter(sd, leaning == "Right"),  # Filter for Right-leaning
+  aes(x = `for`, y = `neutral.toward`, z = against)
+) +
+  geom_point(color = custom_colors["Right"], size = 1.5, alpha = 0.7) +  # Points
+  geom_segment(data = split_lines, inherit.aes = FALSE,  # Add dividing lines
+               aes(x = x_start, y = y_start, z = z_start, 
+                   xend = x_end, yend = y_end, zend = z_end), 
+               color = "black", size = 0.7) +  # Thin lines
+  labs(
+    title = "Right-Leaning",
+    x = "For",
+    y = "Neutral",
+    z = "Against"
+  ) +
+  theme_minimal()
+
+# Combine the plots into a grid
+grid.arrange(left_plot, right_plot, ncol = 2)
+
+```
+
+
+
+
+HEATMAP
+```{r}
+# Install and load required libraries
+# install.packages("ggtern")
+# install.packages("dplyr")
+# install.packages("hexbin")
+#library(ggtern)
+#library(dplyr)
+#library(ggplot2)
+
+# Define coordinates for the dividing lines
+split_lines <- data.frame(
+  x_start = c(0.5, 0, 1),
+  y_start = c(0, 0.5, 0.5),
+  z_start = c(0.5, 0.5, 0),
+  x_end = c(0.5, 0.5, 0.5),
+  y_end = c(0.5, 0.5, 0.5),
+  z_end = c(0.5, 0.5, 0.5)
+)
+
+# Function to bin data into heatmap tiles
+create_heatmap_manual <- function(data, leaning, color, title) {
+  # Filter data for the selected leaning
+  filtered_data <- data %>% filter(leaning == leaning)
+  
+  # Manually bin the data into small triangles
+  binned_data <- filtered_data %>%
+    mutate(
+      x_bin = cut(`for`, breaks = seq(0, 1, by = 0.05)),   # Bin the "For" axis
+      y_bin = cut(`neutral.toward`, breaks = seq(0, 1, by = 0.05))  # Bin the "Neutral" axis
+    ) %>%
+    group_by(x_bin, y_bin) %>%
+    summarize(count = n(), .groups = "drop") %>%
+    mutate(density = count / sum(count))  # Normalize density
+
+  # Convert bin labels to numeric for plotting
+  binned_data <- binned_data %>%
+    mutate(
+      x = as.numeric(sub("\\((.+),.*", "\\1", x_bin)) + 0.025,
+      y = as.numeric(sub("\\((.+),.*", "\\1", y_bin)) + 0.025
+    )
+  
+  # Plot the heatmap using geom_tile
+  ggtern() +
+    geom_tile(data = binned_data, aes(x = x, y = y, z = 1 - x - y, fill = density)) +
+    scale_fill_gradient(low = "white", high = color, name = "Density") +
+    geom_segment(data = split_lines, inherit.aes = FALSE,
+                 aes(x = x_start, y = y_start, z = z_start,
+                     xend = x_end, yend = y_end, zend = z_end),
+                 color = "black", size = 0.7) +
+    labs(
+      title = title,
+      x = "For",
+      y = "Neutral",
+      z = "Against"
+    ) +
+    theme_minimal()
+}
+
+# Plot for Left-Leaning articles
+left_heatmap <- create_heatmap_manual(
+  data = sd, leaning = "Left", color = "blue",
+  title = "Ternary Heatmap of Article Stance Probabilities (Left-Leaning)"
+)
+
+# Plot for Right-Leaning articles
+right_heatmap <- create_heatmap_manual(
+  data = sd, leaning = "Right", color = "red",
+  title = "Ternary Heatmap of Article Stance Probabilities (Right-Leaning)"
+)
+
+# Print the plots
+print(left_heatmap)
+print(right_heatmap)
+
+```
+
+
+
+
+```{r}
+# Install and load required libraries
+# install.packages("ggtern")
+library(ggtern)
+library(dplyr)
+
+# Define coordinates for the dividing lines
+split_lines <- data.frame(
+  x_start = c(0.5, 0, 1),
+  y_start = c(0, 0.5, 0.5),
+  z_start = c(0.5, 0.5, 0),
+  x_end = c(0.5, 0.5, 0.5),
+  y_end = c(0.5, 0.5, 0.5),
+  z_end = c(0.5, 0.5, 0.5)
+)
+
+# Function to create a heatmap-based ternary plot with normalized bins
+create_heatmap_ternary <- function(data, leaning, color, title) {
+  # Filter data for the selected leaning
+  filtered_data <- data %>% filter(leaning == leaning)
+  
+  ggtern(data = filtered_data, 
+         aes(x = `for`, y = `neutral.toward`, z = against)) +
+    stat_bin_tern(geom = "polygon", 
+                  aes(fill = ..count..), bins = 20) +  # Bin the data and compute counts
+    scale_fill_gradient(low = "white", high = color, name = "Count") +  # Color scale
+    geom_segment(data = split_lines, inherit.aes = FALSE,
+                 aes(x = x_start, y = y_start, z = z_start,
+                     xend = x_end, yend = y_end, zend = z_end),
+                 color = "black", size = 0.7) +  # Add dividing lines
+    labs(
+      title = title,
+      x = "For",
+      y = "Neutral",
+      z = "Against"
+    ) +
+    theme_minimal() +
+    theme(legend.position = "right")  # Place legend on the right
+}
+
+# Heatmap for Left-Leaning articles
+left_heatmap <- create_heatmap_ternary(
+  data = sd, leaning = "Left", color = "blue",
+  title = "Ternary Heatmap of Article Stance Probabilities (Left-Leaning)"
+)
+
+# Heatmap for Right-Leaning articles
+right_heatmap <- create_heatmap_ternary(
+  data = sd, leaning = "Right", color = "red",
+  title = "Ternary Heatmap of Article Stance Probabilities (Right-Leaning)"
+)
+
+# Print the plots
+print(left_heatmap)
+print(right_heatmap)
+
+```
+
+
+
+
+
+```{r}
+# Install and load required libraries
+# install.packages("ggtern")
+library(ggtern)
+library(dplyr)
+
+# Define coordinates for dividing lines
+split_lines <- data.frame(
+  x_start = c(0.5, 0, 1),
+  y_start = c(0, 0.5, 0.5),
+  z_start = c(0.5, 0.5, 0),
+  x_end = c(0.5, 0.5, 0.5),
+  y_end = c(0.5, 0.5, 0.5),
+  z_end = c(0.5, 0.5, 0.5)
+)
+
+# Function to create a heatmap-based ternary plot
+create_heatmap_ternary <- function(data, leaning, color, title) {
+  # Filter data for the selected leaning
+  filtered_data <- data %>% filter(leaning == leaning)
+  
+  ggtern(data = filtered_data, 
+         aes(x = `for`, y = `neutral.toward`, z = against)) +
+    stat_summary_tern(geom = "polygon", 
+                      fun = function(x, y, z, w = NULL) { length(x) },  # Count points
+                      aes(fill = ..value..), bins = 20) +  # Heatmap bins
+    scale_fill_gradient(low = "white", high = color, name = "Count") +  # Color scale
+    geom_segment(data = split_lines, inherit.aes = FALSE,
+                 aes(x = x_start, y = y_start, z = z_start,
+                     xend = x_end, yend = y_end, zend = z_end),
+                 color = "black", size = 0.7) +  # Add dividing lines
+    labs(
+      title = title,
+      x = "For",
+      y = "Neutral",
+      z = "Against"
+    ) +
+    theme_minimal() +
+    theme(legend.position = "right")  # Place legend on the right
+}
+
+# Heatmap for Left-Leaning articles
+left_heatmap <- create_heatmap_ternary(
+  data = sd, leaning = "Left", color = "blue",
+  title = "Ternary Heatmap of Article Stance Probabilities (Left-Leaning)"
+)
+
+# Heatmap for Right-Leaning articles
+right_heatmap <- create_heatmap_ternary(
+  data = sd, leaning = "Right", color = "red",
+  title = "Ternary Heatmap of Article Stance Probabilities (Right-Leaning)"
+)
+
+# Print individual heatmaps
+print(left_heatmap)
+print(right_heatmap)
+
+```
+
+```{r}
+# Install and load required libraries
+# install.packages("ggtern")
+library(ggtern)
+library(dplyr)
+
+# Define coordinates for the dividing lines
+split_lines <- data.frame(
+  x_start = c(0.5, 0, 1),
+  y_start = c(0, 0.5, 0.5),
+  z_start = c(0.5, 0.5, 0),
+  x_end = c(0.5, 0.5, 0.5),
+  y_end = c(0.5, 0.5, 0.5),
+  z_end = c(0.5, 0.5, 0.5)
+)
+
+# Function to create a heatmap-based ternary plot
+create_hexbin_heatmap <- function(data, leaning, color, title) {
+  # Filter data for the selected leaning
+  filtered_data <- data %>% filter(leaning == leaning)
+  
+  ggtern(data = filtered_data, 
+         aes(x = `for`, y = `neutral.toward`, z = against)) +
+    stat_bin_hex(bins = 20, aes(fill = ..count..)) +  # Use hexagonal bins for counts
+    scale_fill_gradient(low = "white", high = color, name = "Count") +  # Heatmap color
+    geom_segment(data = split_lines, inherit.aes = FALSE,
+                 aes(x = x_start, y = y_start, z = z_start,
+                     xend = x_end, yend = y_end, zend = z_end),
+                 color = "black", size = 0.7) +  # Add dividing lines
+    labs(
+      title = title,
+      x = "For",
+      y = "Neutral",
+      z = "Against"
+    ) +
+    theme_minimal() +
+    theme(legend.position = "right")  # Place legend on the right
+}
+
+# Heatmap for Left-Leaning articles
+left_heatmap <- create_hexbin_heatmap(
+  data = sd, leaning = "Left", color = "blue",
+  title = "Ternary Heatmap of Article Stance Probabilities (Left-Leaning)"
+)
+
+# Heatmap for Right-Leaning articles
+right_heatmap <- create_hexbin_heatmap(
+  data = sd, leaning = "Right", color = "red",
+  title = "Ternary Heatmap of Article Stance Probabilities (Right-Leaning)"
+)
+
+# Print individual heatmaps
+print(left_heatmap)
+print(right_heatmap)
+
+```
+
+
+
+Closest so far:
+```{r}
+# Install and load required libraries
+# install.packages("ggtern")
+library(ggtern)
+library(dplyr)
+
+# Define coordinates for the lines that split the triangle into 3 equal regions
+split_lines <- data.frame(
+  x_start = c(0.5, 0, 1),
+  y_start = c(0, 0.5, 0.5),
+  z_start = c(0.5, 0.5, 0),
+  x_end = c(0.5, 0.5, 0.5),
+  y_end = c(0.5, 0.5, 0.5),
+  z_end = c(0.5, 0.5, 0.5)
+)
+
+# Function to create individual heatmap-based ternary plot
+create_heatmap_ternary <- function(data, leaning, color, title) {
+  # Filter data for the selected leaning
+  filtered_data <- data %>% filter(leaning == leaning)
+  
+  ggtern(data = filtered_data, 
+         aes(x = `for`, y = `neutral.toward`, z = against)) +
+    stat_density_tern(geom = "polygon", 
+                      aes(fill = ..level..),  # Use ..level.. for density mapping
+                      bins = 20) +            # Number of bins for granularity
+    scale_fill_gradient(low = "white", high = color) +  # Heatmap color gradient
+    geom_segment(data = split_lines, inherit.aes = FALSE,
+                 aes(x = x_start, y = y_start, z = z_start, 
+                     xend = x_end, yend = y_end, zend = z_end), 
+                 color = "black", size = 0.7) +  # Add dividing lines
+    labs(
+      title = title,
+      x = "For",
+      y = "Neutral",
+      z = "Against",
+      fill = "Density"
+    ) +
+    theme_minimal()
+}
+
+# Heatmap for Left-Leaning articles
+left_heatmap <- create_heatmap_ternary(
+  data = sd, leaning = "Left", color = "blue", 
+  title = "Ternary Heatmap of Article Stance Probabilities (Left-Leaning)"
+)
+
+# Heatmap for Right-Leaning articles
+right_heatmap <- create_heatmap_ternary(
+  data = sd, leaning = "Right", color = "red", 
+  title = "Ternary Heatmap of Article Stance Probabilities (Right-Leaning)"
+)
+
+# Print individual heatmaps
+print(left_heatmap)
+print(right_heatmap)
+
+```
+
+
+
+
+
+```{r}
+# Install and load required libraries
+# install.packages("ggtern")
+library(ggtern)
+library(dplyr)
+
+# Define coordinates for the lines that split the triangle into 3 equal regions
+split_lines <- data.frame(
+  x_start = c(0.5, 0, 1),
+  y_start = c(0, 0.5, 0.5),
+  z_start = c(0.5, 0.5, 0),
+  x_end = c(0.5, 0.5, 0.5),
+  y_end = c(0.5, 0.5, 0.5),
+  z_end = c(0.5, 0.5, 0.5)
+)
+
+# Function to create individual heatmap-based ternary plot
+create_heatmap_ternary <- function(data, leaning, color, title) {
+  # Filter data for the selected leaning
+  filtered_data <- data %>% filter(leaning == leaning)
+  
+  ggtern(data = filtered_data, 
+         aes(x = `for`, y = `neutral.toward`, z = against)) +
+    stat_density_tern(geom = "polygon", 
+                      aes(fill = ..level..),  # Map density levels to fill
+                      bins = 20,             # Number of bins for granularity
+                      bdl = 0.01) +          # Set below-detection-limit (handles fringes)
+    scale_fill_gradient(low = "white", high = color, name = "Density", 
+                        breaks = seq(0, max(filtered_data$`for`), length.out = 5)) + 
+    geom_segment(data = split_lines, inherit.aes = FALSE,
+                 aes(x = x_start, y = y_start, z = z_start, 
+                     xend = x_end, yend = y_end, zend = z_end),
+                 color = "black", size = 0.7) +  # Add dividing lines
+    labs(
+      title = title,
+      x = "For",
+      y = "Neutral",
+      z = "Against",
+      fill = "Density"
+    ) +
+    theme_minimal()
+}
+
+# Heatmap for Left-Leaning articles
+left_heatmap <- create_heatmap_ternary(
+  data = sd, leaning = "Left", color = "blue", 
+  title = "Ternary Heatmap of Article Stance Probabilities (Left-Leaning)"
+)
+
+# Heatmap for Right-Leaning articles
+right_heatmap <- create_heatmap_ternary(
+  data = sd, leaning = "Right", color = "red", 
+  title = "Ternary Heatmap of Article Stance Probabilities (Right-Leaning)"
+)
+
+# Print individual heatmaps
+print(left_heatmap)
+print(right_heatmap)
+
+```
+
+
+
+
+```{r}
+# Install and load required libraries
+# install.packages("ggtern")
+library(ggtern)
+library(dplyr)
+
+# Define coordinates for the lines that split the triangle into 3 equal regions
+split_lines <- data.frame(
+  x_start = c(0.5, 0, 1),
+  y_start = c(0, 0.5, 0.5),
+  z_start = c(0.5, 0.5, 0),
+  x_end = c(0.5, 0.5, 0.5),
+  y_end = c(0.5, 0.5, 0.5),
+  z_end = c(0.5, 0.5, 0.5)
+)
+
+# Function to create a normalized heatmap for ternary plot
+create_normalized_heatmap <- function(data, leaning, color, title) {
+  # Filter data for the selected leaning
+  filtered_data <- data %>% filter(leaning == leaning)
+  
+  total_points <- nrow(filtered_data)  # Total number of points for normalization
+  
+  ggtern(data = filtered_data, 
+         aes(x = `for`, y = `neutral.toward`, z = against)) +
+    stat_bin_hex(
+      bins = 20,  # Number of bins for granularity
+      aes(fill = ..count.. / total_points)  # Normalize bin count by total points
+    ) +
+    scale_fill_gradient(low = "white", high = color, name = "Proportion") +  # Gradient fill
+    geom_segment(data = split_lines, inherit.aes = FALSE,
+                 aes(x = x_start, y = y_start, z = z_start, 
+                     xend = x_end, yend = y_end, zend = z_end),
+                 color = "black", size = 0.7) +  # Add dividing lines
+    labs(
+      title = title,
+      x = "For",
+      y = "Neutral",
+      z = "Against"
+    ) +
+    theme_minimal()
+}
+
+# Heatmap for Left-Leaning articles
+left_heatmap <- create_normalized_heatmap(
+  data = sd, leaning = "Left", color = "blue",
+  title = "Ternary Heatmap of Article Stance Probabilities (Left-Leaning)"
+)
+
+# Heatmap for Right-Leaning articles
+right_heatmap <- create_normalized_heatmap(
+  data = sd, leaning = "Right", color = "red",
+  title = "Ternary Heatmap of Article Stance Probabilities (Right-Leaning)"
+)
+
+# Print the heatmaps
+print(left_heatmap)
+print(right_heatmap)
+
+```
+
+
+
+
+```{r}
+# Install and load required libraries
+# install.packages("ggtern")
+library(ggtern)
+library(dplyr)
+
+# Function to manually bin the data into grid cells and plot the heatmap
+create_heatmap_ternary <- function(data, leaning, color, title) {
+  # Filter data for the selected leaning
+  filtered_data <- data %>% filter(leaning == leaning)
+  
+  # Define the grid resolution
+  grid_res <- 20  # Number of bins along each axis
+  
+  # Create grid coordinates
+  grid <- expand.grid(
+    x = seq(0, 1, length.out = grid_res),
+    y = seq(0, 1, length.out = grid_res)
+  ) %>%
+    filter(x + y <= 1) %>%  # Ensure points are within the ternary space
+    mutate(z = 1 - x - y)   # Compute z-coordinate
+  
+  # Function to count points within each grid cell
+  grid_counts <- grid %>%
+    rowwise() %>%
+    mutate(count = sum(
+      abs(filtered_data$`for` - x) < 1 / grid_res &
+      abs(filtered_data$`neutral.toward` - y) < 1 / grid_res &
+      abs(filtered_data$against - z) < 1 / grid_res
+    )) %>%
+    ungroup() %>%
+    mutate(proportion = count / nrow(filtered_data))  # Normalize to get proportions
+
+  # Plot the heatmap
+  ggtern(data = grid_counts, aes(x = x, y = y, z = z)) +
+    geom_polygon(aes(group = interaction(x, y), fill = proportion)) +
+    scale_fill_gradient(low = "white", high = color, name = "Proportion") +
+    labs(
+      title = title,
+      x = "For",
+      y = "Neutral",
+      z = "Against"
+    ) +
+    theme_minimal()
+}
+
+# Heatmap for Left-Leaning articles
+left_heatmap <- create_heatmap_ternary(
+  data = sd, leaning = "Left", color = "blue",
+  title = "Ternary Heatmap of Article Stance Probabilities (Left-Leaning)"
+)
+
+# Heatmap for Right-Leaning articles
+right_heatmap <- create_heatmap_ternary(
+  data = sd, leaning = "Right", color = "red",
+  title = "Ternary Heatmap of Article Stance Probabilities (Right-Leaning)"
+)
+
+# Print the heatmaps
+print(left_heatmap)
+print(right_heatmap)
+
+```
+
+
+
+```{r}
+# Install and load required libraries
+library(ggtern)
+library(dplyr)
+
+# Function to normalize data and plot the heatmap
+create_heatmap_ternary <- function(data, leaning, color, title) {
+  # Filter and normalize data for the selected leaning
+  filtered_data <- data %>%
+    filter(leaning == leaning) %>%
+    rowwise() %>%
+    mutate(
+      total = `for` + `neutral.toward` + against,
+      `for` = `for` / total,
+      `neutral.toward` = `neutral.toward` / total,
+      against = against / total
+    ) %>%
+    ungroup()
+  
+  # Define the grid resolution
+  grid_res <- 50  # Finer grid for better resolution
+  
+  # Create grid coordinates
+  grid <- expand.grid(
+    x = seq(0, 1, length.out = grid_res),
+    y = seq(0, 1, length.out = grid_res)
+  ) %>%
+    filter(x + y <= 1) %>%  # Ensure points are within the ternary space
+    mutate(z = 1 - x - y)   # Compute z-coordinate
+  
+  # Count points within each grid cell
+  grid_counts <- grid %>%
+    rowwise() %>%
+    mutate(count = sum(
+      abs(filtered_data$`for` - x) < 1 / grid_res &
+      abs(filtered_data$`neutral.toward` - y) < 1 / grid_res &
+      abs(filtered_data$against - z) < 1 / grid_res
+    )) %>%
+    ungroup() %>%
+    mutate(proportion = count / nrow(filtered_data))  # Normalize to get proportions
+  
+  # Plot the heatmap
+  ggtern(data = grid_counts, aes(x = x, y = y, z = z)) +
+    geom_polygon(aes(group = interaction(x, y), fill = proportion)) +
+    scale_fill_gradient(low = "white", high = color, name = "Proportion") +
+    labs(
+      title = title,
+      x = "For",
+      y = "Neutral",
+      z = "Against"
+    ) +
+    theme_minimal()
+}
+
+# Heatmap for Left-Leaning articles
+left_heatmap <- create_heatmap_ternary(
+  data = sd, leaning = "Left", color = "blue",
+  title = "Ternary Heatmap of Article Stance Probabilities (Left-Leaning)"
+)
+
+# Heatmap for Right-Leaning articles
+right_heatmap <- create_heatmap_ternary(
+  data = sd, leaning = "Right", color = "red",
+  title = "Ternary Heatmap of Article Stance Probabilities (Right-Leaning)"
+)
+
+# Print the heatmaps
+print(left_heatmap)
+print(right_heatmap)
+
+```
+
+
+
+
+
+```{r}
+# Install and load required libraries
+# install.packages("ggtern")
+library(ggtern)
+library(dplyr)
+
+# Filter the Left-Leaning data
+left_data <- sd %>%
+  filter(leaning == "Left") %>%
+  rowwise() %>%
+  mutate(
+    total = `for` + `neutral.toward` + against,
+    `for` = `for` / total,
+    `neutral.toward` = `neutral.toward` / total,
+    against = against / total
+  ) %>%
+  ungroup()
+
+# Define the grid resolution
+grid_res <- 50  # Number of bins along each axis
+
+# Create a grid of coordinates within the ternary space
+grid <- expand.grid(
+  x = seq(0, 1, length.out = grid_res),
+  y = seq(0, 1, length.out = grid_res)
+) %>%
+  filter(x + y <= 1) %>%  # Ensure points are inside the ternary triangle
+  mutate(z = 1 - x - y)   # Compute the z-coordinate
+
+# Count the number of data points within each grid cell
+grid_counts <- grid %>%
+  rowwise() %>%
+  mutate(count = sum(
+    abs(left_data$`for` - x) < 1 / grid_res &
+    abs(left_data$`neutral.toward` - y) < 1 / grid_res &
+    abs(left_data$against - z) < 1 / grid_res
+  )) %>%
+  ungroup() %>%
+  mutate(proportion = count / nrow(left_data))  # Normalize counts to get proportions
+
+# Plot the heatmap
+ggtern(data = grid_counts, aes(x = x, y = y, z = z)) +
+  geom_polygon(aes(group = interaction(x, y), fill = proportion)) +
+  scale_fill_gradient(low = "white", high = "blue", name = "Proportion") +
+  labs(
+    title = "Ternary Heatmap of Article Stance Probabilities (Left-Leaning)",
+    x = "For",
+    y = "Neutral",
+    z = "Against"
+  ) +
+  theme_minimal()
+
+```
+
+
+
+
+
+
+```{r}
+# Install and load required libraries
+library(ggtern)
+library(dplyr)
+
+# Step 1: Filter and normalize the Left-Leaning data
+left_data <- sd %>%
+  filter(leaning == "Left") %>%
+  rowwise() %>%
+  mutate(
+    total = `for` + `neutral.toward` + against,
+    `for` = `for` / total,
+    `neutral.toward` = `neutral.toward` / total,
+    against = against / total
+  ) %>%
+  ungroup()
+
+# Check that the data is normalized
+print(head(left_data))
+
+# Step 2: Define a coarser grid resolution
+grid_res <- 10  # Coarser resolution for debugging
+
+# Create grid of ternary coordinates
+grid <- expand.grid(
+  x = seq(0, 1, length.out = grid_res),
+  y = seq(0, 1, length.out = grid_res)
+) %>%
+  filter(x + y <= 1) %>%
+  mutate(z = 1 - x - y)
+
+# Step 3: Count points within each grid cell
+grid_counts <- grid %>%
+  rowwise() %>%
+  mutate(count = sum(
+    abs(left_data$`for` - x) < 1 / grid_res &
+    abs(left_data$`neutral.toward` - y) < 1 / grid_res &
+    abs(left_data$against - z) < 1 / grid_res
+  )) %>%
+  ungroup() %>%
+  mutate(proportion = count / nrow(left_data))  # Normalize counts
+
+# Step 4: Check grid counts
+print(head(grid_counts))
+
+# Step 5: Plot the heatmap
+ggtern(data = grid_counts, aes(x = x, y = y, z = z)) +
+  geom_polygon(aes(group = interaction(x, y), fill = proportion), color = "grey80") +
+  scale_fill_gradient(low = "white", high = "blue", name = "Proportion") +
+  labs(
+    title = "Ternary Heatmap of Article Stance Probabilities (Left-Leaning)",
+    x = "For",
+    y = "Neutral",
+    z = "Against"
+  ) +
+  theme_minimal()
+
+```
+
+
+
+
+
+
+
+
+```{r}
+# Install and load required libraries
+library(ggtern)
+library(dplyr)
+
+# Step 1: Filter Left-Leaning data
+left_data <- sd %>%
+  filter(leaning == "Left")
+
+# Step 2: Define grid resolution and round data to grid centers
+grid_res <- 0.05  # Grid step size (coarser for better visualization)
+
+# Round data to the nearest grid center
+binned_data <- left_data %>%
+  mutate(
+    x = round(`for` / grid_res) * grid_res,
+    y = round(`neutral.toward` / grid_res) * grid_res,
+    z = round(against / grid_res) * grid_res
+  ) %>%
+  group_by(x, y, z) %>%
+  summarize(count = n(), .groups = "drop") %>%
+  mutate(proportion = count / sum(count))  # Normalize counts to proportions
+
+# Step 3: Plot using geom_tile for heatmap
+ggtern(data = binned_data, aes(x = x, y = y, z = z)) +
+  geom_tile(aes(fill = proportion)) +
+  scale_fill_gradient(low = "white", high = "blue", name = "Proportion") +
+  labs(
+    title = "Ternary Heatmap of Article Stance Probabilities (Left-Leaning)",
+    x = "For",
+    y = "Neutral",
+    z = "Against"
+  ) +
+  theme_minimal()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+lol what is this
+```{r}
+library(GGally)
+
+# Parallel coordinates plot
+ggparcoord(data = sd, 
+           columns = c(6, 7, 8), # Assuming these are 'for', 'neutral', and 'against'
+           groupColumn = "leaning",
+           scale = "globalminmax") +
+  scale_color_manual(values = custom_colors) +
+  labs(
+    title = "Parallel Coordinate Plot of Stance Probabilities",
+    x = "Stance",
+    y = "Probability"
+  ) +
+  theme_minimal()
+
+```
+
+
+
+```{r}
+install.packages("ggradar")
+pacman::p_load(ggradar)
+
+# Aggregate probabilities for Left and Right groups
+agg_data <- sd %>%
+  group_by(leaning) %>%
+  summarise(
+    `For` = mean(`for`),
+    `Neutral` = mean(`neutral.toward`),
+    `Against` = mean(against)
+  )
+
+# Convert to radar chart-friendly format
+agg_data <- as.data.frame(agg_data)
+agg_data <- agg_data %>%
+  pivot_longer(-leaning, names_to = "stance", values_to = "value") %>%
+  pivot_wider(names_from = stance, values_from = value)
+
+# Radar chart
+ggradar(agg_data, 
+        group.colours = c("blue", "red")) +
+  labs(
+    title = "Radar Chart of Average Probabilities by Leaning"
+  )
+
+```
+
+
+
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Aggregate the data for Left and Right groups
+agg_data <- sd %>%
+  group_by(leaning) %>%
+  summarise(
+    `For` = mean(`for`),
+    `Neutral` = mean(`neutral.toward`),
+    `Against` = mean(against)
+  )
+
+# Reshape the data for ggplot
+radar_data <- agg_data %>%
+  pivot_longer(-leaning, names_to = "stance", values_to = "value") %>%
+  mutate(stance = factor(stance, levels = c("For", "Neutral", "Against")))  # Ensure proper order
+
+# Add a row to "close" the polygons (for radar chart)
+radar_data <- bind_rows(radar_data, radar_data %>% filter(stance == "For"))
+
+# Radar plot with custom colors
+ggplot(radar_data, aes(x = stance, y = value, group = leaning, color = leaning, fill = leaning)) +
+  geom_polygon(alpha = 0.2, size = 1) +  # Fill and outline for polygons
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  coord_polar() +
+  scale_color_manual(values = c("Left" = "blue", "Right" = "red")) +  # Custom colors for lines
+  scale_fill_manual(values = c("Left" = "blue", "Right" = "red")) +   # Custom colors for fill
+  scale_y_continuous(limits = c(0, 1)) +  # Adjust scale if probabilities are between 0 and 1
+  labs(
+    title = "Radar Chart of Average Probabilities by Leaning",
+    x = "",
+    y = "Probability"
+  ) +
+  theme_minimal()
+
+```
+
+
+```{r}
+# Calculate average probabilities
+heatmap_data <- sd %>%
+  group_by(leaning) %>%
+  summarise(
+    `For` = mean(`for`),
+    `Neutral` = mean(`neutral.toward`),
+    `Against` = mean(against)
+  ) %>%
+  pivot_longer(-leaning, names_to = "stance", values_to = "probability")
+
+# Heatmap
+ggplot(heatmap_data, aes(x = stance, y = leaning, fill = probability)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "blue") +
+  labs(
+    title = "Heatmap of Stance Probabilities by Leaning",
+    x = "Stance",
+    y = "Leaning",
+    fill = "Probability"
+  ) +
+  theme_minimal()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+# Reshape the data to long format for visualization
+sd_long <- sd %>%
+  select(textID, source, `for`, neutral, against) %>%
+  pivot_longer(cols = c("for", "neutral", "against"),
+               names_to = "stance",
+               values_to = "probability")
+
+# Stacked bar plot
+ggplot(sd_long, aes(x = textID, y = probability, fill = stance)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("blue", "gray", "red")) +  # Customize colors
+  labs(title = "Uncertainty in Article Stances",
+       x = "Article ID",
+       y = "Probability",
+       fill = "Stance") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),  # Hide x-axis labels for clarity
+        axis.ticks.x = element_blank())
+
+```
+
+
+
+
+
+
+
+Found this code online:P
+'''
+require(ggplot2)
+require(ggtern)
+require(MASS) 
+require(scales)
+require(plyr)
+
+palette <- c( "#FF9933", "#002C54", "#3375B2", "#CCDDEC", "#BFBFBF", "#000000")
+
+# Example data
+# sig <- matrix(c(3,0,0,2),2,2)
+# data <- data.frame(mvrnorm(n=10000, rep(2, 2), sig))
+# data$X1 <- data$X1/max(data$X1)
+# data$X2 <- data$X2/max(data$X2)
+# data$X1[which(data$X1<0)] <- runif(length(data$X1[which(data$X1<0)]))
+# data$X2[which(data$X2<0)] <- runif(length(data$X2[which(data$X2<0)]))
+
+# Print 2d heatmap
+heatmap2d <- function(data) {
+p <- ggplot(data, aes(x=X1, y=X2)) + 
+    stat_bin2d(bins=50) + 
+    scale_fill_gradient2(low=palette[4], mid=palette[3], high=palette[2]) +
+    xlab("Percentage x") +
+    ylab("Percentage y") +
+    scale_y_continuous(labels = percent) +
+    scale_x_continuous(labels = percent) +
+    theme_bw() + theme(text = element_text(size = 15))
+print(p)
+}
+
+# Example data
+# data$X3 <- with(data, 1-X1-X2)
+# data <- data[data$X3 >= 0,]
+
+# Auxiliary function for heatmap3d
+count_bin <- function(data, minT, maxT, minR, maxR, minL, maxL) {
+    ret <- data
+    ret <- with(ret, ret[minT <= X1 & X1 < maxT,])
+    ret <- with(ret, ret[minL <= X2 & X2 < maxL,])
+    ret <- with(ret, ret[minR <= X3 & X3 < maxR,])
+    if(is.na(nrow(ret))) {
+        ret <- 0
+    } else {
+        ret <- nrow(ret)
+    }
+    ret
+}
+
+# Plot 3dimensional histogram in a triangle
+# See dataframe data for example of the input dataformat
+heatmap3d <- function(data, inc, logscale=FALSE, text=FALSE, plot_corner=TRUE) {
+#   When plot_corner is FALSE, corner_cutoff determines where to stop plotting
+    corner_cutoff = 1
+#   When plot_corner is FALSE, corner_number toggles display of obervations in the corners
+#   This only has an effect when text==FALSE
+    corner_numbers = TRUE
+
+    count <- 1
+    points <- data.frame()
+    for (z in seq(0,1,inc)) {
+        x <- 1- z
+        y <- 0
+        while (x>0) {
+            points <- rbind(points, c(count, x, y, z))
+            x <- round(x - inc, digits=2)
+            y <- round(y + inc, digits=2)
+            count <- count + 1
+        }
+        points <- rbind(points, c(count, x, y, z))
+        count <- count + 1
+    }
+    colnames(points) = c("IDPoint","T","L","R")
+
+#   base <- ggtern(data=points,aes(L,T,R)) +
+#               theme_bw() + theme_hidetitles() + theme_hidearrows() +
+#               geom_point(shape=21,size=10,color="blue",fill="white") +
+#               geom_text(aes(label=IDPoint),color="blue")
+#   print(base)
+
+    polygons <- data.frame()
+    c <- 1
+#   Normal triangles
+    for (p in points$IDPoint) {
+        if (is.element(p, points$IDPoint[points$T==0])) {
+            next
+        } else {
+            pL <- points$L[points$IDPoint==p]
+            pT <- points$T[points$IDPoint==p]
+            pR <- points$R[points$IDPoint==p]
+            polygons <- rbind(polygons, 
+                        c(c,p),
+                        c(c,points$IDPoint[abs(points$L-pL) < inc/2 & abs(points$R-pR-inc) < inc/2]),
+                        c(c,points$IDPoint[abs(points$L-pL-inc) < inc/2 & abs(points$R-pR) < inc/2]))    
+            c <- c + 1
+        }
+    }
+
+# Upside down triangles
+    for (p in points$IDPoint) {
+        if (!is.element(p, points$IDPoint[points$T==0])) {
+            if (!is.element(p, points$IDPoint[points$L==0])) {
+                pL <- points$L[points$IDPoint==p]
+                pT <- points$T[points$IDPoint==p]
+                pR <- points$R[points$IDPoint==p]
+                polygons <- rbind(polygons, 
+                            c(c,p),
+                            c(c,points$IDPoint[abs(points$T-pT) < inc/2 & abs(points$R-pR-inc) < inc/2]),
+                            c(c,points$IDPoint[abs(points$L-pL) < inc/2 & abs(points$R-pR-inc) < inc/2])) 
+                c <- c + 1
+            }
+        }
+    }
+
+#   IMPORTANT FOR CORRECT ORDERING.
+    polygons$PointOrder <- 1:nrow(polygons)
+    colnames(polygons) = c("IDLabel","IDPoint","PointOrder")
+
+    df.tr <- merge(polygons,points)
+
+    Labs = ddply(df.tr,"IDLabel",function(x){c(c(mean(x$T),mean(x$L),mean(x$R)))})
+    colnames(Labs) = c("Label","T","L","R")
+
+#   triangles <- ggtern(data=df.tr,aes(L,T,R)) +
+#                   geom_polygon(aes(group=IDLabel),color="black",alpha=0.25) +
+#                   geom_text(data=Labs,aes(label=Label),size=4,color="black") +
+#                   theme_bw()
+#        print(triangles)
+
+    bins <- ddply(df.tr, .(IDLabel), summarize, 
+                maxT=max(T),
+                maxL=max(L),
+                maxR=max(R),
+                minT=min(T),
+                minL=min(L),
+                minR=min(R))
+
+    count <- ddply(bins, .(IDLabel), summarize, N=count_bin(data, minT, maxT, minR, maxR, minL, maxL))
+    df <- join(df.tr, count, by="IDLabel")
+
+    Labs = ddply(df,.(IDLabel,N),function(x){c(c(mean(x$T),mean(x$L),mean(x$R)))})
+    colnames(Labs) = c("Label","N","T","L","R")
+
+    if (plot_corner==FALSE){
+        corner <- ddply(df, .(IDPoint, IDLabel), summarize, maxperc=max(T,L,R))
+        corner <- corner$IDLabel[corner$maxperc>=corner_cutoff]
+
+        df$N[is.element(df$IDLabel, corner)] <- 0
+        if (text==FALSE & corner_numbers==TRUE) {
+            Labs$N[!is.element(Labs$Label, corner)] <- ""
+            text=TRUE
+        }
+    }    
+
+    heat <- ggtern(data=df,aes(L,T,R)) +
+        geom_polygon(aes(fill=N,group=IDLabel),color="black",alpha=1)
+    if (logscale == TRUE) {
+            heat <- heat + scale_fill_gradient(name="Observations", trans = "log",
+                            low=palette[2], high=palette[4])
+    } else {
+            heat <- heat + scale_fill_gradient(name="Observations", 
+                            low=palette[2], high=palette[4])
+    }
+    heat <- heat +
+        Tlab("x") +
+        Rlab("y") +
+        Llab("z") +
+        theme_bw() + 
+        theme(axis.tern.arrowsep=unit(0.02,"npc"), #0.01npc away from ticks ticklength
+                    axis.tern.arrowstart=0.25,axis.tern.arrowfinish=0.75,
+                    axis.tern.text=element_text(size=12),
+                    axis.tern.arrow.text.T=element_text(vjust=-1),
+                    axis.tern.arrow.text.R=element_text(vjust=2),
+                    axis.tern.arrow.text.L=element_text(vjust=-1),
+                    axis.tern.arrow.text=element_text(size=12),
+                    axis.tern.title=element_text(size=15))
+    if (text==FALSE) {
+        print(heat)
+    } else {
+        print(heat + geom_text(data=Labs,aes(label=N),size=3,color="white"))
+    }
+}
+
+# Usage examples
+# heatmap3d(data, 0.2, text=TRUE)
+# heatmap3d(data, 0.05)
+# heatmap3d(data, 0.1, text=FALSE, logscale=TRUE)
+# heatmap3d(data, 0.1, text=TRUE, logscale=FALSE, plot_corner=FALSE)
+# heatmap3d(data, 0.1, text=FALSE, logscale=FALSE, plot_corner=FALSE)
+'''
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------
+
+
+```{r}
+library(ggplot2)
+library(ggridges)
+
+# Create a ridgeline plot directly from wide format
+ggplot() +
+  geom_density_ridges(
+    data = sd, aes(x = `for`, y = "for", fill = source), alpha = 0.8
+  ) +
+  geom_density_ridges(
+    data = sd, aes(x = neutral, y = "neutral", fill = source), alpha = 0.8
+  ) +
+  geom_density_ridges(
+    data = sd, aes(x = against, y = "against", fill = source), alpha = 0.8
+  ) +
+  labs(title = "Ridgeline Plot of Probabilities by Source and Stance",
+       x = "Probability",
+       y = "Stance",
+       fill = "Source") +
+  theme_minimal()
+
+```
+
+
+```{r}
+library(ggplot2)
+
+# Filter the data for CNN
+sd_left <- sd[sd$leaning == "Left", ]
+
+# Create a faceted density plot for CNN
+ggplot(sd_left) +
+  geom_density(aes(x = `for`, fill = "for"), alpha = 0.6) +
+  geom_density(aes(x = `neutral.toward`, fill = "neutral"), alpha = 0.6) +
+  geom_density(aes(x = against, fill = "against"), alpha = 0.6) +
+  scale_fill_manual(values = c("for" = "blue", "neutral" = "green", "against" = "red"),
+                    labels = c("For", "Neutral", "Against"),
+                    name = "Stance") +
+  labs(title = "Probability Distribution of Stances (CNN Only)",
+       x = "Probability of being neutral??",
+       y = "Density") +
+  theme_minimal()
+
+```
+
+
+
+
+```{r}
+library(ggplot2)
+
+# Filter the data for CNN
+sd_right <- sd[sd$leaning == "Right", ]
+
+# Create a faceted density plot for CNN
+ggplot(sd_right) +
+  geom_density(aes(x = `for`, fill = "for"), alpha = 0.6) +
+  geom_density(aes(x = `neutral.toward`, fill = "neutral"), alpha = 0.6) +
+  geom_density(aes(x = against, fill = "against"), alpha = 0.6) +
+  scale_fill_manual(values = c("for" = "blue", "neutral" = "green", "against" = "red"),
+                    labels = c("For", "Neutral", "Against"),
+                    name = "Stance") +
+  labs(title = "Probability Distribution of Stances (CNN Only)",
+       x = "Probability of being neutral??",
+       y = "Density") +
+  theme_minimal()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+# Filter for CNN
+sd_cnn <- sd[sd$source == "CNN", ]
+
+# Calculate total expected counts and uncertainty
+cnn_summary <- sd_cnn %>%
+  summarise(
+    total_for = sum(`for`),
+    total_neutral = sum(neutral),
+    total_against = sum(against),
+    sd_for = sd(`for`),
+    sd_neutral = sd(neutral),
+    sd_against = sd(against)
+  ) %>%
+  pivot_longer(cols = everything(), 
+               names_to = c(".value", "stance"), 
+               names_pattern = "(total|sd)_(.*)")
+
+# Bar plot with uncertainty (error bars)
+ggplot(cnn_summary, aes(x = stance, y = total, fill = stance)) +
+  geom_bar(stat = "identity", width = 0.6, alpha = 0.8) +
+  geom_errorbar(aes(ymin = total - sd, ymax = total + sd), width = 0.2, color = "black") +
+  scale_fill_manual(values = c("for" = "blue", "neutral" = "green", "against" = "red")) +
+  labs(title = "Uncertainty in Stance Classification (CNN Only)",
+       x = "Stance",
+       y = "Expected Number of Articles",
+       fill = "Stance") +
+  theme_minimal()
+
+```
+
+
+
+```{r}
+# Group data by source and stance, and count the number of articles
+summary_counts <- sd %>%
+  group_by(source, stance) %>%
+  summarise(article_count = n(), .groups = "drop")
+
+# Bar plot with side-by-side bars
+ggplot(summary_counts, aes(x = stance, y = article_count, fill = source)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.6) +
+  scale_fill_manual(values = c("CNN" = "blue", "Fox News" = "red")) +
+  labs(title = "Number of Articles by Source and Stance",
+       x = "Stance",
+       y = "Number of Articles",
+       fill = "Source") +
+  theme_minimal()
+
+```
+
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+# Group data by source and stance, and count the number of articles
+summary_counts <- sd %>%
+  group_by(source, stance) %>%
+  summarise(article_count = n(), .groups = "drop") %>%
+  # Ensure all combinations of source and stance are present
+  complete(source = c("CNN", "Fox News"), stance = c("for", "neutral", "against"), fill = list(article_count = 0))
+
+# Bar plot with side-by-side bars
+ggplot(summary_counts, aes(x = stance, y = article_count, fill = source)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.6) +
+  scale_fill_manual(values = c("CNN" = "blue", "Fox News" = "red")) +
+  labs(title = "Number of Articles by Source and Stance",
+       x = "Stance",
+       y = "Number of Articles",
+       fill = "Source") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5))  # Keep stance names horizontal
+
+```
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Reshape data into long format for probabilities
+sd_long <- sd %>%
+  pivot_longer(cols = c(`for`, neutral, against), 
+               names_to = "stance", 
+               values_to = "probability")
+
+# Create violin plot
+ggplot(sd_long, aes(x = stance, y = probability, fill = source)) +
+  geom_violin(trim = FALSE, alpha = 0.6) +
+  scale_fill_manual(values = c("CNN" = "blue", "Fox News" = "red")) +
+  labs(title = "Uncertainty in Stance Probabilities by Source",
+       x = "Stance",
+       y = "Probability",
+       fill = "Source") +
+  theme_minimal()
+
+```
+
+
+```{r}
+colnames(sd)
+```
+
+
+
+```{r}
+# Reshape data into long format
+sd_long <- sd %>%
+  pivot_longer(
+    cols = c(`for`, neutral, against), 
+    names_to = "stance_type",  # Avoids conflict with existing "stance" column
+    values_to = "probability"
+  )
+
+# Create violin plot
+ggplot(sd_long, aes(x = stance_type, y = probability, fill = source)) +
+  geom_violin(trim = FALSE, alpha = 0.6) +
+  scale_fill_manual(values = c("CNN" = "blue", "Fox News" = "red")) +
+  labs(title = "Uncertainty in Stance Probabilities by Source",
+       x = "Stance",
+       y = "Probability",
+       fill = "Source") +
+  theme_minimal()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,338 @@
+---
+title: "Missing data"
+author: "Laura Sørine Voldgaard"
+date: "2024-12-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#getRversion()
+#citation()
+RStudio.Version()
+```
+
+
+```{r}
+# libraries
+pacman::p_load(tidyverse, readr, cowplot, extrafont)
+```
+
+```{r}
+# Import system fonts (only needs to be run once)
+#font_import(prompt = FALSE)
+
+# Use Helvetica
+theme_set(
+  theme_minimal(base_family = "Helvetica") +
+    theme(text = element_text(size = 12))
+)
+```
+
+
+```{r}
+rm(list=ls())
+```
+
+
+-----------------------------------------------------------------
+
+*Available data from NOW corpus - all data*
+
+```{r}
+# Create the dataframe manually from viz/missing_data/fr/scraped_articles2
+scraped_data_overview <- data.frame(
+  Month = c(
+    "20-11", "20-12", "21-01", "21-02", "21-03", "21-04", "21-05", "21-06",
+    "21-07", "21-08", "21-09", "21-10", "21-11", "21-12", "22-01", "22-02",
+    "22-03", "22-04", "22-05", "22-06", "22-07", "22-08", "22-09", "22-10",
+    "22-11", "22-12", "23-01", "23-02", "23-03", "23-04", "23-05", "23-06",
+    "23-07", "23-08", "23-09", "23-10", "23-11", "23-12", "24-01", "24-02",
+    "24-03", "24-04", "24-05", "24-06", "24-07", "24-08", "24-09", "24-10", "24-11"
+  ),
+  Sources = c(
+    162010.0, 194500.0, 173147.0, 142555.0, 151831.0, 141023.0, 146528.0, 169528.0,
+    161193.0, 150012.0, 160199.0, 158147.0, 163092.0, 162276.0, 206454.0, 169646.0,
+    128961.0, 101986.0, 85300.0, 80238.0, 118911.0, 119645.0, 108644.0, 87596.0,
+    77393.0, 77754.0, 78687.0, 69554.0, 72945.0, 75738.0, 76759.0, 78266.0, 64580.0,
+    64934.0, 61795.0, 66651.0, 55029.0, 59206.0, 69431.0, 73967.0, 78241.0, 69855.0,
+    59140.0, 70835.0, 86873.0, 78178.0, 84270.0, 77000.0, 107885.0
+  ),
+  Texts = c(
+    132331, 143596, 166006, 138003, 148288, 137943, 127270, 177145, 168476, 154411,
+    162321, 170691, 160853, 173071, 211830, 166337, 136908, 110914, 88880, 85029,
+    119729, 122255, 114876, 89224, 79020, 76372, 81092, 72079, 71015, 76718, 78256,
+    79247, 65693, 64990, 61908, 66762, 55186, 59362, 62239, 66592, 73136, 62475,
+    59595, 61907, 54953, 50703, 52411, 49762, 85748
+  ),
+  Merged = c(
+    130953.0, 143035.0, 165571.0, 137059.0, 146165.0, 136067.0, 125928.0, 169491.0,
+    161140.0, 149956.0, 160173.0, 158080.0, 155910.0, 162216.0, 206387.0, 163977.0,
+    128918.0, 101961.0, 85300.0, 80235.0, 115489.0, 116150.0, 108643.0, 87593.0,
+    77393.0, 75119.0, 78686.0, 69554.0, 71014.0, 75738.0, 76758.0, 78263.0, 64522.0,
+    64931.0, 61795.0, 66650.0, 55016.0, 59204.0, 57965.0, 65048.0, 68322.0, 60685.0,
+    51389.0, 58066.0, 39893.0, 34968.0, 34440.0, 31874.0, 85169.0
+  )
+)
+
+# View the dataframe
+print(scraped_data_overview)
+
+```
+
+
+```{r}
+# visualize
+
+# Convert Month to a date-like format (assumes 'yy-mm')
+scraped_data_overview$Month <- as.Date(paste0("20", scraped_data_overview$Month, "-01"), "%Y-%m-%d")
+
+# Reshape the data for ggplot
+library(tidyr)
+df_long <- pivot_longer(scraped_data_overview, cols = c(Sources, Texts, Merged), 
+                        names_to = "Category", values_to = "Values")
+
+
+# Plot with fewer date labels
+library(ggplot2)
+available_NOW_data <- ggplot(df_long, aes(x = Month, y = Values, color = Category, group = Category)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  scale_x_date(
+    date_breaks = "4 months",  # Show every 3rd month
+    date_labels = "%y-%m"      # Format: year-month
+    ) +
+  labs(title = "Available data from NOW corpus over time (US articles only)", x = "Months (yy-mm)", y = "N Articles") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  # Rotate labels
+  theme_minimal()
+
+
+```
+
+```{r}
+available_NOW_data
+```
+
+```{r}
+getwd()
+```
+
+
+```{r}
+# save plot
+ggsave("available_NOW_data.png", plot = available_NOW_data, width = 8, height = 6, dpi = 300)  # Save as PNG
+```
+
+
+
+--------------------------------------------------------
+
+*Available data from NOW corpus - allsides rated articles*
+
+
+```{r}
+all_articles_allsides <- read.csv("all_articles_allsides.csv")
+```
+
+```{r}
+library(dplyr)
+library(tidyr)
+
+# Create a new column for the month
+all_articles_allsides <- all_articles_allsides %>%
+  mutate(month = format(as.Date(date, "%y-%m-%d"), "%y-%m"))
+
+# Group by month and leaning, and count the number of articles
+monthly_counts <- all_articles_allsides %>%
+  group_by(month, leaning) %>%
+  summarise(count = n(), .groups = "drop")
+
+# Pivot wider to create columns for each leaning category (Left, Right)
+monthly_counts_pivot <- monthly_counts %>%
+  pivot_wider(names_from = leaning, values_from = count, values_fill = 0)
+
+# View the resulting dataframe
+print(monthly_counts_pivot)
+
+```
+
+
+
+
+```{r}
+# visualize
+
+# Convert Month to a date-like format (assumes 'yy-mm')
+monthly_counts_pivot$month <- as.Date(paste0("20", monthly_counts_pivot$month, "-01"), "%Y-%m-%d")
+
+# Reshape the data for ggplot
+library(tidyr)
+df_long <- pivot_longer(monthly_counts_pivot, cols = c(Left, Right), 
+                        names_to = "Category", values_to = "Values")
+
+
+# Plot with fewer date labels
+library(ggplot2)
+available_NOW_data_allsides <- ggplot(df_long, aes(x = month, y = Values, color = Category, group = Category)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  scale_x_date(
+    date_breaks = "4 months",  # Show every 3rd month
+    date_labels = "%y-%m"      # Format: year-month
+    ) +
+  scale_color_manual(
+    values = c("Left" = "blue", "Right" = "red")  # Customize colors
+  ) +
+  labs(title = "Available data of allsides rated sources from NOW corpus over time (US articles)", x = "Months (yy-mm)", y = "N Articles") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  # Rotate labels
+  theme_minimal()
+
+
+```
+
+
+```{r}
+available_NOW_data_allsides
+```
+
+```{r}
+# save plot
+ggsave("available_NOW_data_allsides.png", plot = available_NOW_data_allsides, width = 8, height = 6, dpi = 300)  # Save as PNG
+```
+
+
+
+
+
+
+
+
+--------------------------------------------------------
+
+*Distribution of articles about abortion from each leaning*
+
+
+```{r}
+articles_distribution_leaning <- read.csv("articles_distribution_leaning.csv")
+```
+
+
+```{r}
+# visualize
+
+# Convert Month to a date-like format (assumes 'yy-mm')
+articles_distribution_leaning$Month <- as.Date(paste0("20", articles_distribution_leaning$Month, "-01"), "%Y-%m-%d")
+
+# Reshape the data for ggplot
+library(tidyr)
+df_long <- pivot_longer(articles_distribution_leaning, cols = c(Left, Right, Total), 
+                        names_to = "Category", values_to = "Values")
+
+
+# Plot with fewer date labels
+articles_distribution_leaning_dynamic <- ggplot(df_long, aes(x = Month, y = Values, color = Category, group = Category)) +
+  geom_line(linewidth = 1) +  # Use linewidth for the lines
+  geom_point(size = 2) +      # Add points to the lines
+  scale_x_date(
+    date_breaks = "4 months",  # Show every 4th month
+    date_labels = "%y-%m"      # Format: year-month
+  ) +
+  scale_y_continuous(
+    limits = c(0, 850),         # Set the lower limit to 0 and allow the upper limit to scale automatically
+    expand = c(0, 0)           # Remove extra space above and below the data
+  ) +
+  scale_color_manual(
+    values = c("Left" = "blue", "Right" = "red", "Total" = "black")  # Customize colors
+  ) +
+  labs(
+    title = "Evolution of US AllSides rated Articles about Abortion",
+    x = "Months (yy-mm)", 
+    y = "N Articles"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)  # Rotate x-axis labels
+  ) +
+  theme_minimal()
+
+# Print the plot
+print(articles_distribution_leaning_dynamic)
+
+
+```
+
+
+```{r}
+# save plot
+ggsave("articles_distribution_leaning_dynamic.png", plot = articles_distribution_leaning_dynamic, width = 8, height = 6, dpi = 300)  # Save as PNG
+```
+
+
+
+```{r}
+# Exclude the last row
+data_excl_last <- articles_distribution_leaning[-nrow(articles_distribution_leaning), ]  # This removes the last row of the data frame
+
+# Subset the specific columns
+selected_columns <- data_excl_last[c("Left", "Right")]
+
+# Calculate total counts for each column
+total_counts <- colSums(selected_columns)
+
+# Print the totals
+print(total_counts)
+```
+
+
+
+
+
+```{r}
+# Convert the totals to a data frame for ggplot
+total_counts_df <- data.frame(
+  Category = names(total_counts),  # Categories are the column names: "Left", "Right"
+  Count = as.numeric(total_counts)  # Counts are the total values
+)
+
+# Load ggplot2
+library(ggplot2)
+
+# Create the bar plot
+articles_distribution_leaning_static <- ggplot(total_counts_df, aes(x = Category, y = Count, fill = Category)) +
+  geom_bar(stat = "identity", fill = c("blue", "red")) +
+  geom_text(aes(label = Count), vjust = -0.5, size = 4) +  # Add text labels above the bars
+  theme_minimal() +
+  labs(
+    title = "Distribution of US AllSides Rated Articles about Abortion",
+    x = "Leaning",
+    y = "Total Count"
+  )
+
+articles_distribution_leaning_static
+
+```
+
+```{r}
+# save plot
+ggsave("articles_distribution_leaning_static.png", plot = articles_distribution_leaning_static, width = 8, height = 6, dpi = 300)  # Save as PNG
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
